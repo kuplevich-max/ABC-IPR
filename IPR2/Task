@@ -1,1 +1,67 @@
+#include <iostream>
+#include <mutex>
+#include <atomic>
+#include <chrono>
 
+using namespace std;
+
+/* TASK 1 */
+const int NumTasks = 1024 * 1024;
+int NumThreads[4] = { 4, 8, 16, 32 };
+mutex mtx;
+int pointer = 0;
+
+int safepointer()
+{
+	lock_guard<mutex> guard(mtx);
+	return pointer++;
+}
+
+void processing_with_mutex(int* arr, int sleep = 0)
+{
+	int loc_ptr = 0;
+	while (loc_ptr < NumTasks)
+	{
+		loc_ptr = safepointer();
+		arr[loc_ptr]++;
+		if (sleep)
+			this_thread::sleep_for(chrono::nanoseconds(sleep));
+	}
+}
+
+void task1_with_mutex(int *arr)
+{
+	cout << "Task1 " << endl << endl;
+	for (int i = 0; i < 4; i++)
+	{
+		pointer = 0;
+		arr = new int[NumTasks] {0};
+		auto start = chrono::high_resolution_clock::now();
+		
+		thread* threads = new thread[NumThreads[i]]{ thread(processing_with_mutex, arr) };
+		for (int j = 0; j < NumThreads[i]; j++)
+			threads[i].join();
+			
+		auto end = chrono::high_resolution_clock::now();
+		chrono::duration<double> duration = end - start;
+		cout << NumThreads[i] << "threads with mutex duration: " << duration.count();
+		delete[] threads;
+
+		start = chrono::high_resolution_clock::now();
+		
+		threads = new thread[NumThreads[i]]{ thread(processing_with_mutex, arr, 10) };
+		for (int j = 0; j < NumThreads[i]; j++)
+			threads[i].join();
+		end = chrono::high_resolution_clock::now();
+		
+		duration = end - start;
+		cout << NumThreads[i] << "threads With mutex duration with 10 ns sleep: " << duration.count();
+	}
+}
+
+int main()
+{
+	int *arr = new int[NumTasks] {0};
+	task1_with_mutex(arr);
+	return 0;
+}
