@@ -10,6 +10,14 @@ using namespace std;
 const int NumTasks = 1024 * 1024;
 const int NumThreads[4] = { 4, 8, 16, 32 };
 
+
+bool Correct(int *arr)
+{
+    for(int i = 0; i < NumTasks; i++)
+        if(!(arr[i] == 1)) return false;
+    return true;
+}
+
 /* MUTEX */
 
 mutex mtx;
@@ -39,6 +47,8 @@ void task1_with_mutex(int *arr)
 	for (int i = 0; i < 4; i++)
 	{
 		pointer = 0;
+		for(int j = 0; j < NumTasks; j++)
+		    arr[j] = 0;
 		
 		auto start = chrono::high_resolution_clock::now();
 		
@@ -51,13 +61,19 @@ void task1_with_mutex(int *arr)
 			
 		auto end = chrono::high_resolution_clock::now();
 		chrono::duration<double> duration = end - start;
-		cout << NumThreads[i] << " threads with mutex duration: " << duration.count() << endl;
+		cout << NumThreads[i] << " threads with mutex duration: " << duration.count() << "\t";
+		if(Correct(arr)) 
+		    cout << "OK" << endl;
+		else 
+		    cout << "INCORRECT" << endl;
 		delete[] threads;
 	}
 	
 	for (int i = 0; i < 4; i++)
 	{
 		pointer = 0;
+		for(int j = 0; j < NumTasks; j++)
+		    arr[j] = 0;
 		
 		auto start = chrono::high_resolution_clock::now();
 		
@@ -70,7 +86,11 @@ void task1_with_mutex(int *arr)
 			
 		auto end = chrono::high_resolution_clock::now();
 		chrono::duration<double> duration = end - start;
-		cout << NumThreads[i] << " threads with mutex duration with 10 ns sleep: " << duration.count() << endl;
+	cout << NumThreads[i] << " threads with mutex duration with 10 ns sleep: " << duration.count() << "\t";
+		if(Correct(arr)) 
+		    cout << "OK" << endl;
+		else 
+		    cout << "INCORRECT" << endl;
 		delete[] threads;
 	}
 	
@@ -102,8 +122,10 @@ void task1_with_atomic(int* arr)
 {
     for (int i = 0; i < 4; i++)
 	{
-		pointer = 0;
+		
 		atomic_pointer = -1;
+		for(int j = 0; j < NumTasks; j++)
+		    arr[j] = 0;
 		auto start = chrono::high_resolution_clock::now();
 		
 		thread* threads = new thread[NumThreads[i]];
@@ -115,14 +137,20 @@ void task1_with_atomic(int* arr)
 			
 		auto end = chrono::high_resolution_clock::now();
 		chrono::duration<double> duration = end - start;
-		cout << NumThreads[i] << " threads with atomic duration: " << duration.count() << endl;
+		cout << NumThreads[i] << " threads with atomic duration: " << duration.count() << "\t";
+		if(Correct(arr))
+		    cout << "OK" << endl;
+		else 
+		    cout << "INCORRECT" << endl;
 		delete[] threads;
 	}
 	
 	for (int i = 0; i < 4; i++)
 	{
-		pointer = 0;
+		
 		atomic_pointer = -1;
+		for(int j = 0; j < NumTasks; j++)
+		    arr[j] = 0;
 		auto start = chrono::high_resolution_clock::now();
 		
 		thread* threads = new thread[NumThreads[i]];
@@ -134,10 +162,18 @@ void task1_with_atomic(int* arr)
 			
 		auto end = chrono::high_resolution_clock::now();
 		chrono::duration<double> duration = end - start;
-		cout << NumThreads[i] << " threads with atomic duration with 10 ns sleep: " << duration.count() << endl;
+	    cout << NumThreads[i] << " threads with atomic duration with 10 ns sleep: " << duration.count() << "\t";
+		if(Correct(arr))
+		    cout << "OK" << endl;
+		else 
+		    cout << "INCORRECT" << endl;
 		delete[] threads;
 	}
 }
+
+/* TASK 2 */
+
+
 
 int main()
 {
