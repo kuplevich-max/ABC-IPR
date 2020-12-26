@@ -90,11 +90,11 @@ int getAtomicPtr(int sleep)
 
 void processing_with_atomic(int *arr, int sleep)
 {
-    int loc_ptr = getAtomicPtr(sleep);
+    int loc_ptr = -1;   
     while(loc_ptr<NumTasks)
     {
-        arr[loc_ptr]++;
         loc_ptr = getAtomicPtr(sleep);
+        arr[loc_ptr]++;
     }
 }
 
@@ -103,7 +103,7 @@ void task1_with_atomic(int* arr)
     for (int i = 0; i < 4; i++)
 	{
 		pointer = 0;
-		
+		atomic_pointer = -1;
 		auto start = chrono::high_resolution_clock::now();
 		
 		thread* threads = new thread[NumThreads[i]];
@@ -122,7 +122,7 @@ void task1_with_atomic(int* arr)
 	for (int i = 0; i < 4; i++)
 	{
 		pointer = 0;
-		
+		atomic_pointer = -1;
 		auto start = chrono::high_resolution_clock::now();
 		
 		thread* threads = new thread[NumThreads[i]];
