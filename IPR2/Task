@@ -242,43 +242,29 @@ class FixedQueue
         
         void push(int8_t val)
         {
-            if(q.size() < size)
-            {
-                lock_guard<mutex> guard(mtx);
-                q.push(val);
-            }
-            else
-            {
-                unique_lock<mutex> lock(mtx);
-		        cond.wait(lock, [this] {return q.size() < size;});
-		        q.push(val);
-		        cond.notify_one();
-            }
+            unique_lock<mutex> lock(mtx);
+		    cond.wait(lock, [this] {return q.size() < size;});
+		    q.push(val);
+		    cond.notify_one();
         }
         
-        bool not_full()
-        {
-            return q.size() < size;
-        }
+        
         
         bool pop(int8_t& val)
         {
             unique_lock<mutex> lock(mtx);
-            if(this->empty())
-            {
-                if(!cond.wait_for(lock, chrono::milliseconds(1), [this]{return !this->empty();}))
+            
+            
+                if(!cond.wait_for(lock, chrono::milliseconds(1), [this]{return !this->q.empty();}))
                 {
                     return false;
                 }
-                else
-                {
-                    
                     val = q.front();
                     q.pop();
                     cond.notify_one();
                     return true;
-                }
-            }
+                
+        
         }
         
         bool empty()
@@ -379,7 +365,7 @@ void Task2_dynamic()
 	    }
 	    
 	    
-	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK": cout << "INCORRECT" << endl;
+	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK\n": cout << "INCORRECT" << endl;
 	    auto end = chrono::high_resolution_clock::now();
 	    chrono::duration<float> duration = end - start;
 	    cout << "Duration: " << duration.count() << endl;
@@ -411,7 +397,7 @@ void Task2_Fixed()
 	        consumers[j].join();
 	    }
 	    
-	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK" << endl: cout << "INCORRECT" << endl;
+	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK\n": cout << "INCORRECT" << endl;
 	    auto end = chrono::high_resolution_clock::now();
 	    chrono::duration<float> duration = end - start;
 	    cout << "Duration: " << duration.count() << endl;
