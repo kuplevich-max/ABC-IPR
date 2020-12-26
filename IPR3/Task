@@ -1,5 +1,3 @@
-// Lab3.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
-//
 
 
 #include "omp.h"
@@ -9,7 +7,7 @@
 
 
 #define N 10000000
-#define CHUNKSIZE 100
+#define CHUNKSIZE 10000
 
 using namespace std;
 
@@ -30,15 +28,18 @@ int main()
 	chunk = CHUNKSIZE;
 	
 	unsigned int t1 = clock();
-
 	
 		#pragma omp parallel for default(shared) private(i) schedule(static, chunk) reduction(+:sum)
 		for (i = 0; i < N; i++)
 			sum = sum + a[i] * b[i];
 	
-	
 	unsigned int t2 = clock();
-	cout << sum << endl << t2 - t1;
+	cout << sum << endl << t2 - t1 << endl;
+	t1 = clock();
+	sum = 0;
+	for (i = 0; i < N; i++)
+		sum = sum + a[i] * b[i];
+	t2 = clock();
+	cout << sum << endl << t2 - t1 << endl;
 }
-
 
