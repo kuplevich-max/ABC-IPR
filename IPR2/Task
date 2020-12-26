@@ -3,6 +3,8 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <condition_variable>
+#include <queue>
 
 using namespace std;
 
@@ -173,7 +175,210 @@ void task1_with_atomic(int* arr)
 
 /* TASK 2 */
 
+int ProducerNum[3] = {1, 2, 4};
+int ConsumerNum[3] = {1, 2, 4};
+int QueueSize[3] = {1, 4, 16};
+const int TaskNum = 1024*1024;
 
+class DynamicQueue
+{
+    public:
+        uint size = 0;
+        mutex mtx;
+        queue<int8_t> q;
+        condition_variable cond;
+        int active_producers = 0;
+        int ResultSum = 0;
+        
+        void push(int8_t val)
+        {
+            lock_guard<mutex> guard(mtx);
+            q.push(val);
+        }
+        
+        bool empty()
+        {
+            if(q.empty())
+                return true;
+            else 
+                return false;
+        }
+        
+        bool pop(int8_t& val)
+        {
+            unique_lock<mutex> lock(mtx);
+            if(this->empty())
+            {
+                if(!cond.wait_for(lock, std::chrono::milliseconds(10), [this] {return !q.empty();}))
+                {
+                    return false;
+                }
+                else
+                {
+                    val = q.front();
+                    q.pop();
+                    cond.notify_one();
+                    return true;
+                }
+            }
+        }
+        
+        
+};
+
+
+class FixedQueue
+{
+    public:
+        uint size;
+        mutex mtx;
+        queue<int8_t> q;
+        condition_variable cond;
+        int active_producers = 0;
+        int ResultSum = 0;
+        
+        FixedQueue(uint n)
+        {
+            size = n;
+        }
+        
+        void push(int8_t val)
+        {
+            if(q.size() < size)
+            {
+                lock_guard<mutex> guard(mtx);
+                q.push(val);
+            }
+            else
+            {
+                unique_lock<mutex> lock(mtx);
+		        cond.wait(lock, [this] {return q.size() < size;});
+		        q.push(val);
+		        cond.notify_one();
+            }
+        }
+        
+        bool not_full()
+        {
+            return q.size() < size;
+        }
+        
+        bool pop(int8_t& val)
+        {
+            unique_lock<mutex> lock(mtx);
+            if(this->empty())
+            {
+                if(!cond.wait_for(lock, chrono::milliseconds(1), [this]{return !this->empty();}))
+                {
+                    return false;
+                }
+                else
+                {
+                    
+                    val = q.front();
+                    q.pop();
+                    cond.notify_one();
+                    return true;
+                }
+            }
+        }
+        
+        bool empty()
+        {
+            unique_lock<mutex> lock(mtx);
+            if(q.empty())
+                return true;
+            else 
+                return false;
+        }
+};
+
+
+mutex del_mtx;
+
+void produce1(DynamicQueue* q)
+{
+	for (int i = 0;i < TaskNum;i++) {
+		q->push(1);
+	}
+	lock_guard<mutex> del(del_mtx);
+	q->active_producers--;
+	
+}
+
+void produce2(FixedQueue* q)
+{
+	for (int i = 0;i < TaskNum;i++) {
+		q->push(1);
+	}
+	lock_guard<mutex> del(del_mtx);
+	q->active_producers--;
+	
+}
+
+mutex consumer_mtx;
+mutex result_mtx;
+void consume1(DynamicQueue* q)
+{
+	int current_result = 0;
+	while (q->active_producers > 0 || !q->empty()) {
+		int8_t val;
+		if (q->pop(val)) {
+			current_result += val;
+		}
+	}
+	lock_guard<mutex> result(result_mtx);
+	q->ResultSum += current_result;
+	
+	return;
+}
+
+void consume2(FixedQueue* q)
+{
+	int current_result = 0;
+	while (q->active_producers > 0 || !q->empty()) {
+		int8_t val;
+		if (q->pop(val)) {
+			current_result += val;
+		}
+	}
+	lock_guard<mutex> result(result_mtx);
+	q->ResultSum += current_result;
+	
+	return;
+}
+
+void Task2_dynamic()
+{
+    for(int i = 0; i < 3; i++)
+	{
+	    DynamicQueue q;
+	    q.active_producers = ProducerNum[i];
+	    
+	    thread *consumers = new thread[ConsumerNum[i]];
+	    thread *producers = new thread[ProducerNum[i]];
+	    
+	    for(int j = 0; j < ConsumerNum[i]; j++)
+	    {
+	        producers[j] = thread(produce1, &q);
+	        consumers[j] = thread(consume1, &q);
+	        
+	    }
+	    auto start = chrono::high_resolution_clock::now();
+	    
+	    for(int j = 0; j < ConsumerNum[i]; j++)
+	    {
+	        producers[j].join();
+	        consumers[j].join();
+	    }
+	    
+	    cout << "Sum " << q.ResultSum << std::endl << "Right : " << TaskNum * ProducerNum[i] << endl;
+	    auto end = chrono::high_resolution_clock::now();
+	    chrono::duration<float> duration = end - start;
+	    cout << "Duration: " << duration.count() << endl;
+	    
+	}
+}
 
 int main()
 {
@@ -181,6 +386,9 @@ int main()
 	cout << "Task 1\n" << endl;
 	task1_with_mutex(arr);
 	task1_with_atomic(arr);
+	cout << "\nTask 2\n" << endl;
+	Task2_dynamic();
+        
 	
 	
 	return 0;
