@@ -206,21 +206,18 @@ class DynamicQueue
         
         bool pop(int8_t& val)
         {
-            unique_lock<mutex> lock(mtx);
+            lock_guard<mutex> lock(mtx);
             if(this->empty())
+                return false;
+            
+            else
             {
-                if(!cond.wait_for(lock, std::chrono::milliseconds(10), [this] {return !q.empty();}))
-                {
-                    return false;
-                }
-                else
-                {
-                    val = q.front();
-                    q.pop();
-                    cond.notify_one();
-                    return true;
-                }
+                val = q.front();
+                q.pop();
+               
+                return true;
             }
+            
         }
         
         
@@ -237,9 +234,10 @@ class FixedQueue
         int active_producers = 0;
         int ResultSum = 0;
         
-        FixedQueue(uint n)
+        FixedQueue(uint n, int c)
         {
             size = n;
+            active_producers = c;
         }
         
         void push(int8_t val)
@@ -301,7 +299,8 @@ void produce1(DynamicQueue* q)
 	for (int i = 0;i < TaskNum;i++) {
 		q->push(1);
 	}
-	lock_guard<mutex> del(del_mtx);
+	//lock_guard<mutex> del(del_mtx);
+	unique_lock<mutex> lock(del_mtx);
 	q->active_producers--;
 	
 }
@@ -327,7 +326,8 @@ void consume1(DynamicQueue* q)
 			current_result += val;
 		}
 	}
-	lock_guard<mutex> result(result_mtx);
+	//lock_guard<mutex> result(result_mtx);
+	unique_lock<mutex> result(result_mtx);
 	q->ResultSum += current_result;
 	
 	return;
@@ -346,6 +346,12 @@ void consume2(FixedQueue* q)
 	q->ResultSum += current_result;
 	
 	return;
+}
+
+
+bool isCorrect(int a, int b)
+{
+    return a == b;
 }
 
 void Task2_dynamic()
@@ -372,13 +378,48 @@ void Task2_dynamic()
 	        consumers[j].join();
 	    }
 	    
-	    cout << "Sum " << q.ResultSum << std::endl << "Right : " << TaskNum * ProducerNum[i] << endl;
+	    
+	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK": cout << "INCORRECT" << endl;
 	    auto end = chrono::high_resolution_clock::now();
 	    chrono::duration<float> duration = end - start;
 	    cout << "Duration: " << duration.count() << endl;
 	    
 	}
 }
+
+void Task2_Fixed()
+{
+    for(int i = 0; i < 3; i++)
+	{
+	    FixedQueue q(QueueSize[i], ProducerNum[i]);
+	    q.active_producers = ProducerNum[i];
+	    
+	    thread *consumers = new thread[ConsumerNum[i]];
+	    thread *producers = new thread[ProducerNum[i]];
+	    
+	    for(int j = 0; j < ConsumerNum[i]; j++)
+	    {
+	        producers[j] = thread(produce2, &q);
+	        consumers[j] = thread(consume2, &q);
+	        
+	    }
+	    auto start = chrono::high_resolution_clock::now();
+	    
+	    for(int j = 0; j < ConsumerNum[i]; j++)
+	    {
+	        producers[j].join();
+	        consumers[j].join();
+	    }
+	    
+	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK" << endl: cout << "INCORRECT" << endl;
+	    auto end = chrono::high_resolution_clock::now();
+	    chrono::duration<float> duration = end - start;
+	    cout << "Duration: " << duration.count() << endl;
+	    
+	}
+}
+
+
 
 int main()
 {
@@ -387,8 +428,10 @@ int main()
 	task1_with_mutex(arr);
 	task1_with_atomic(arr);
 	cout << "\nTask 2\n" << endl;
+	cout << "\tDynamic Queue\n";
 	Task2_dynamic();
-        
+	cout << "\tFixed Queue\n";
+    Task2_Fixed();
 	
 	
 	return 0;
