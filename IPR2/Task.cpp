@@ -5,15 +5,15 @@
 #include <thread>
 #include <condition_variable>
 #include <queue>
-
+#define SLEEP 1000
 using namespace std;
 
 /* TASK 1 */
-const int NumTasks = 1024 * 1024;
+const int NumTasks = 1024*100;
 const int NumThreads[4] = { 4, 8, 16, 32 };
 
 
-bool Correct(int *arr)
+bool Correct(std::array<int, NumTasks> &arr)
 {
     for(int i = 0; i < NumTasks; i++)
         if(!(arr[i] == 1)) return false;
@@ -31,19 +31,22 @@ int safepointer()
 	return pointer++;
 }
 
-void processing_with_mutex(int* arr, int sleep = 0)
+void processing_with_mutex(std::array<int, NumTasks> &arr, int sleep = 0)
 {
 	int loc_ptr = 0;
 	while (loc_ptr < NumTasks)
 	{
-		loc_ptr = safepointer();
-		arr[loc_ptr]++;
+	    loc_ptr = safepointer();
+	    if(loc_ptr >= NumTasks)
+	        break;
+	    arr.at(loc_ptr)++;
+		
 		if (sleep)
 			this_thread::sleep_for(chrono::nanoseconds(sleep));
 	}
 }
 
-void task1_with_mutex(int *arr)
+void task1_with_mutex(std::array<int, NumTasks> &arr)
 {
 	
 	for (int i = 0; i < 4; i++)
@@ -56,7 +59,7 @@ void task1_with_mutex(int *arr)
 		
 		thread* threads = new thread[NumThreads[i]];
 		    for (int j = 0; j < NumThreads[i]; j++)
-			    threads[j] = thread(processing_with_mutex, arr, 0);
+			    threads[j] = thread(processing_with_mutex, std::ref(arr), 0);
 		
 		for (int j = 0; j < NumThreads[i]; j++)
 			threads[j].join();
@@ -81,7 +84,7 @@ void task1_with_mutex(int *arr)
 		
 		thread* threads = new thread[NumThreads[i]];
 		    for (int j = 0; j < NumThreads[i]; j++)
-			    threads[j] = thread(processing_with_mutex, arr, 10);
+			    threads[j] = thread(processing_with_mutex, std::ref(arr), 10);
 		
 		for (int j = 0; j < NumThreads[i]; j++)
 			threads[j].join();
@@ -110,17 +113,19 @@ int getAtomicPtr(int sleep)
     return ptr;
 }
 
-void processing_with_atomic(int *arr, int sleep)
+void processing_with_atomic(std::array<int, NumTasks> &arr, int sleep)
 {
     int loc_ptr = -1;   
     while(loc_ptr<NumTasks)
     {
         loc_ptr = getAtomicPtr(sleep);
-        arr[loc_ptr]++;
+        if(loc_ptr >= NumTasks)
+            break;
+        arr.at(loc_ptr)++;
     }
 }
 
-void task1_with_atomic(int* arr)
+void task1_with_atomic(std::array<int, NumTasks> &arr)
 {
     for (int i = 0; i < 4; i++)
 	{
@@ -132,7 +137,7 @@ void task1_with_atomic(int* arr)
 		
 		thread* threads = new thread[NumThreads[i]];
 		    for (int j = 0; j < NumThreads[i]; j++)
-			    threads[j] = thread(processing_with_atomic, arr, 0);
+			    threads[j] = thread(processing_with_atomic, std::ref(arr), 0);
 		
 		for (int j = 0; j < NumThreads[i]; j++)
 			threads[j].join();
@@ -157,7 +162,7 @@ void task1_with_atomic(int* arr)
 		
 		thread* threads = new thread[NumThreads[i]];
 		    for (int j = 0; j < NumThreads[i]; j++)
-			    threads[j] = thread(processing_with_atomic, arr, 10);
+			    threads[j] = thread(processing_with_atomic, std::ref(arr), 10);
 		
 		for (int j = 0; j < NumThreads[i]; j++)
 			threads[j].join();
@@ -178,7 +183,8 @@ void task1_with_atomic(int* arr)
 int ProducerNum[3] = {1, 2, 4};
 int ConsumerNum[3] = {1, 2, 4};
 int QueueSize[3] = {1, 4, 16};
-const int TaskNum = 1024*1024;
+const int TaskNum = 1024*10; //1024*1024
+
 
 class DynamicQueue
 {
@@ -206,17 +212,23 @@ class DynamicQueue
         
         bool pop(int8_t& val)
         {
-            lock_guard<mutex> lock(mtx);
+            mtx.lock();
             if(this->empty())
-                return false;
-            
-            else
             {
+                mtx.unlock();
+                this_thread::sleep_for(chrono::nanoseconds(SLEEP));
+                mtx.lock();
+                if(this->empty())
+                {
+                    mtx.unlock();
+                    return false;
+                }
+            }
                 val = q.front();
                 q.pop();
-               
+               mtx.unlock();
                 return true;
-            }
+            
             
         }
         
@@ -254,17 +266,15 @@ class FixedQueue
         {
             unique_lock<mutex> lock(mtx);
             
+            if(!cond.wait_for(lock, chrono::milliseconds(1), [this]{return !this->q.empty();}))
+            {
+                return false;
+            }
             
-                if(!cond.wait_for(lock, chrono::milliseconds(1), [this]{return !this->q.empty();}))
-                {
-                    return false;
-                }
-                    val = q.front();
-                    q.pop();
-                    cond.notify_one();
-                    return true;
-                
-        
+            val = q.front();
+            q.pop();
+            cond.notify_all();
+            return true;
         }
         
         bool empty()
@@ -279,6 +289,7 @@ class FixedQueue
 
 
 mutex del_mtx;
+
 
 void produce1(DynamicQueue* q)
 {
@@ -303,6 +314,8 @@ void produce2(FixedQueue* q)
 
 mutex consumer_mtx;
 mutex result_mtx;
+
+
 void consume1(DynamicQueue* q)
 {
 	int current_result = 0;
@@ -387,14 +400,13 @@ void Task2_Fixed()
 	    {
 	        producers[j] = thread(produce2, &q);
 	        consumers[j] = thread(consume2, &q);
-	        
 	    }
 	    auto start = chrono::high_resolution_clock::now();
 	    
 	    for(int j = 0; j < ConsumerNum[i]; j++)
 	    {
-	        producers[j].join();
 	        consumers[j].join();
+	        producers[j].join();
 	    }
 	    
 	    isCorrect(q.ResultSum, TaskNum*ProducerNum[i])?cout << "OK\n": cout << "INCORRECT" << endl;
@@ -409,10 +421,10 @@ void Task2_Fixed()
 
 int main()
 {
-	int *arr = new int[NumTasks] {0};
+	std::array<int, NumTasks> arr{0};
 	cout << "Task 1\n" << endl;
-	task1_with_mutex(arr);
-	task1_with_atomic(arr);
+	task1_with_mutex(std::ref(arr));
+	task1_with_atomic(std::ref(arr));
 	cout << "\nTask 2\n" << endl;
 	cout << "\tDynamic Queue\n";
 	Task2_dynamic();
